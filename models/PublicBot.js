@@ -2,17 +2,50 @@ import mongoose from "mongoose";
 
 const PublicBotSchema = new mongoose.Schema(
   {
-    userId: String,              // public user id
-    botToken: String,
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    botToken: {
+      type: String,
+      required: true,
+    },
+
+    botId: String,
+
+    botUsername: String,
     botName: String,
+
+    gender: {
+      type: String,
+      default: "female",
+    },
+
+    personality: {
+      type: String,
+      default: "normal",
+    },
+
     ownerName: String,
     ownerUsername: String,
-    ownerId: String,
-    supportGroup: String,
-    logGroup: String,
-    startMessage: String,
 
-    webhookSet: { type: Boolean, default: false }
+    photoUrl: String,
+
+    webhookConnected: {
+      type: Boolean,
+      default: false,
+    },
+
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+
+    lastActiveAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { timestamps: true }
 );
