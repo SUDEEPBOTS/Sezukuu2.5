@@ -27,51 +27,33 @@ export default async function handler(req, res) {
       return res.json({ ok: false, msg: "Missing botId" });
     }
 
-    // fetch bot
     const bot = await PublicBot.findById(botId);
     if (!bot) return res.json({ ok: false, msg: "Bot not found" });
 
     const webhookURL =
-      process.env.MAIN_URL +
-      `/api/public-bot-webhook?botId=${bot._id}`;
+      process.env.MAIN_URL + `/api/public-bot-webhook?botId=${bot._id}`;
 
-    // -------------------------
-    // CONNECT WEBHOOK
-    // -------------------------
     if (action === "connect") {
       const r = await setWebhook(bot.botToken, webhookURL);
-
       await PublicBot.findByIdAndUpdate(botId, {
         webhookConnected: true
       });
-
       return res.json({ ok: true, msg: "Webhook connected", telegram: r });
     }
 
-    // -------------------------
-    // DISCONNECT WEBHOOK
-    // -------------------------
     if (action === "disconnect") {
       const r = await deleteWebhook(bot.botToken);
-
       await PublicBot.findByIdAndUpdate(botId, {
         webhookConnected: false
       });
-
       return res.json({ ok: true, msg: "Webhook removed", telegram: r });
     }
 
-    // -------------------------
-    // DELETE BOT
-    // -------------------------
     if (action === "delete") {
       await PublicBot.findByIdAndDelete(botId);
       return res.json({ ok: true, msg: "Bot deleted" });
     }
 
-    // -------------------------
-    // UPDATE SETTINGS
-    // -------------------------
     if (action === "update") {
       await PublicBot.findByIdAndUpdate(botId, {
         botName,
