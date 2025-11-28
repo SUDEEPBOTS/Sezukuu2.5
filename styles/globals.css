@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Custom Global Styles ===== */
+html, body {
+  padding: 0;
+  margin: 0;
+  background: #f9fafb;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+               "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Remove focus outlines */
+*:focus {
+  outline: none !important;
+}
+
+/* Smooth transitions */
+* {
+  transition: all 0.15s ease;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Cards */
+.card {
+  @apply p-4 bg-white border rounded-lg shadow-sm;
+}
+
+/* Input fields */
+.input {
+  @apply w-full p-2 border rounded mb-3 bg-white;
+}
+
+/* Buttons */
+.btn {
+  @apply px-4 py-2 rounded bg-black text-white font-semibold;
+}
+.btn:hover {
+  background: #222;
+}
+
+/* Titles */
+.title {
+  @apply text-3xl font-bold mb-4;
+}
+.subtitle {
+  @apply text-lg font-semibold mb-2;
+}
+
+/* Container */
+.container {
+  @apply max-w-4xl mx-auto p-6;
+}
