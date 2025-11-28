@@ -1,5 +1,3 @@
-// pages/api/public-admin/control.js
-
 import { connectDB } from "@/lib/db";
 import PublicBot from "@/models/PublicBot";
 import { setWebhook, deleteWebhook } from "@/lib/telegram";
@@ -88,26 +86,9 @@ export default async function handler(req, res) {
     }
 
     return res.json({ ok: false, msg: "Invalid action" });
+
   } catch (err) {
     console.log("CONTROL ERROR:", err);
     return res.json({ ok: false, msg: err.message });
   }
-}
-
-// ==============================
-// SET WEBHOOK
-// ==============================
-export async function setWebhook(token, url) {
-  return telegramRequest(token, "setWebhook", {
-    url: url
-  });
-}
-
-// ==============================
-// DELETE WEBHOOK
-// ==============================
-export async function deleteWebhook(token) {
-  return telegramRequest(token, "deleteWebhook", {
-    drop_pending_updates: true
-  });
 }
