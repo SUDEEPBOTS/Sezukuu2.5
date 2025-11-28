@@ -5,14 +5,19 @@ import PublicBot from "@/models/PublicBot";
 import Memory from "@/models/Memory";
 import Group from "@/models/Group";
 import { generateWithYuki } from "@/lib/ai";
-import { sendMessage, sendChatAction } from "@/lib/telegram";
+import {
+  sendMessage,
+  sendChatAction,
+  setWebhook,
+  deleteWebhook,
+} from "@/lib/telegram";
 
 // RAW body for Telegram
 export const config = {
   api: { bodyParser: false },
 };
 
-// Read raw body
+// Read raw body safely
 function readRaw(req) {
   return new Promise((resolve) => {
     let data = "";
@@ -24,6 +29,7 @@ function readRaw(req) {
 export default async function handler(req, res) {
   await connectDB();
 
+  // Raw update
   const raw = await readRaw(req);
   let update;
 
@@ -33,24 +39,25 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  // ===========================
-  // CALLBACK QUERY HANDLER
-  // ===========================
+  const botId = req.query.botId;
+  if (!botId) return res.status(200).json({ ok: true });
+
+  const bot = await PublicBot.findById(botId).lean();
+  if (!bot || !bot.webhookConnected)
+    return res.status(200).json({ ok: true });
+
+  const BOT_TOKEN = bot.botToken;
+
+  // ===================================================================
+  // CALLBACK QUERIES
+  // ===================================================================
   if (update.callback_query) {
     const q = update.callback_query;
-    const data = q.data;
     const chatId = q.message.chat.id;
     const userId = q.from.id.toString();
+    const data = q.data;
 
-    const botId = req.query.botId;
-    if (!botId) return res.status(200).json({ ok: true });
-
-    const bot = await PublicBot.findById(botId).lean();
-    if (!bot) return res.status(200).json({ ok: true });
-
-    const BOT_TOKEN = bot.botToken;
-
-    // MAIN MENU
+    //===== MAIN MENU =====
     if (data === "menu") {
       await sendMessage(
         BOT_TOKEN,
@@ -71,16 +78,15 @@ export default async function handler(req, res) {
           },
         }
       );
-
       return res.status(200).json({ ok: true });
     }
 
-    // SETTINGS
+    //===== SETTINGS MENU =====
     if (data === "settings") {
       await sendMessage(
         BOT_TOKEN,
         chatId,
-        `⚙ *${bot.botName} Settings*\nChoose what you want to edit.`,
+        `⚙ *${bot.botName} Settings*`,
         {
           parse_mode: "Markdown",
           reply_markup: {
@@ -92,11 +98,10 @@ export default async function handler(req, res) {
           },
         }
       );
-
       return res.status(200).json({ ok: true });
     }
 
-    // PERSONALITY MENU
+    //===== PERSONALITY MENU =====
     if (data === "persona") {
       await sendMessage(BOT_TOKEN, chatId, `🧬 *Choose Personality*`, {
         parse_mode: "Markdown",
@@ -109,7 +114,6 @@ export default async function handler(req, res) {
           ],
         },
       });
-
       return res.status(200).json({ ok: true });
     }
 
@@ -120,14 +124,13 @@ export default async function handler(req, res) {
       await sendMessage(
         BOT_TOKEN,
         chatId,
-        `🧬 Personality updated to: *${type}*`,
+        `🧬 Personality updated to *${type}*`,
         { parse_mode: "Markdown" }
       );
-
       return res.status(200).json({ ok: true });
     }
 
-    // GENDER MENU
+    //===== GENDER MENU =====
     if (data === "gender") {
       await sendMessage(BOT_TOKEN, chatId, `🚻 *Choose Gender*`, {
         parse_mode: "Markdown",
@@ -139,7 +142,6 @@ export default async function handler(req, res) {
           ],
         },
       });
-
       return res.status(200).json({ ok: true });
     }
 
@@ -150,14 +152,13 @@ export default async function handler(req, res) {
       await sendMessage(
         BOT_TOKEN,
         chatId,
-        `🚻 Gender updated to: *${gen}*`,
+        `🚻 Gender updated to *${gen}*`,
         { parse_mode: "Markdown" }
       );
-
       return res.status(200).json({ ok: true });
     }
 
-    // OWNER
+    //===== OWNER =====
     if (data === "owner") {
       await sendMessage(
         BOT_TOKEN,
@@ -168,24 +169,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // HELP
-    if (data === "help") {
-      await sendMessage(
-        BOT_TOKEN,
-        chatId,
-        "⭐ Commands:\n\n/start – Open menu\nTalk by tagging me or replying\nUse me in group & DM 🤍"
-      );
-      return res.status(200).json({ ok: true });
-    }
-
-    // RESET MEMORY
-    if (data === "reset") {
-      await Memory.deleteMany({ botId, userId, chatId });
-      await sendMessage(BOT_TOKEN, chatId, "🧠 Memory reset!");
-      return res.status(200).json({ ok: true });
-    }
-
-    // SUPPORT
+    //===== SUPPORT =====
     if (data === "support") {
       await sendMessage(
         BOT_TOKEN,
@@ -195,87 +179,74 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // CHAT
+    //===== MEMORY RESET =====
+    if (data === "reset") {
+      await Memory.deleteMany({ botId, userId, chatId });
+      await sendMessage(BOT_TOKEN, chatId, "🧠 Memory reset!");
+      return res.status(200).json({ ok: true });
+    }
+
+    //===== CHAT =====
     if (data === "chat") {
-      await sendMessage(BOT_TOKEN, chatId, "Aww okay 😊 bolo na…");
+      await sendMessage(BOT_TOKEN, chatId, "Hehe okay baby 😊 bolo…");
       return res.status(200).json({ ok: true });
     }
 
     return res.status(200).json({ ok: true });
   }
 
-  // ===========================
-  // NORMAL MESSAGE HANDLER
-  // ===========================
+  // ===================================================================
+  // MESSAGE HANDLER
+  // ===================================================================
   const msg = update.message || update.edited_message;
   const chatId = msg?.chat?.id;
   const userId = msg?.from?.id?.toString();
   const userText = msg?.text || msg?.caption || "";
   const chatType = msg?.chat?.type;
-  const isGroup =
-    chatType === "group" ||
-    chatType === "supergroup" ||
-    chatType?.includes("group");
+  const isGroup = chatType?.includes("group");
 
-  const botId = req.query.botId;
-  if (!botId || !chatId || !userId)
-    return res.status(200).json({ ok: true });
+  if (!chatId || !userId) return res.status(200).json({ ok: true });
 
-  const bot = await PublicBot.findById(botId).lean();
-  if (!bot || !bot.webhookConnected)
-    return res.status(200).json({ ok: true });
-
-  const BOT_TOKEN = bot.botToken;
   const botUsername = bot.botUsername.toLowerCase();
   const lower = (userText || "").toLowerCase();
 
-  // ===========================
-  // /start with inline menu
-  // ===========================
+  //===== /start =====
   if (lower.startsWith("/start")) {
-    const text = bot.startMessage || `Hey, I'm *${bot.botName}* ✨`;
-
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
+    await sendMessage(
+      BOT_TOKEN,
+      chatId,
+      bot.startMessage || `Hey, I'm *${bot.botName}* ✨`,
+      {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
             [{ text: "❤️ Chat with Me", callback_data: "chat" }],
-            [
-              { text: "ℹ️ Help", callback_data: "help" },
-              { text: "👤 Owner", callback_data: "owner" },
-            ],
+            [{ text: "ℹ️ Help", callback_data: "help" }],
+            [{ text: "👤 Owner", callback_data: "owner" }],
             [{ text: "🧠 Reset Memory", callback_data: "reset" }],
-            [{ text: "🔗 Support", callback_data: "support" }],
             [{ text: "📋 Menu", callback_data: "menu" }],
           ],
         },
-      }),
-    });
+      }
+    );
 
     return res.status(200).json({ ok: true });
   }
 
-  // ===========================
-  // BOT ADDED TO GROUP
-  // ===========================
+  //===== BOT ADDED TO GROUP =====
   if (update.my_chat_member?.new_chat_member?.status === "member") {
     const welcome = bot.welcomeMessage || "Thanks for adding me 💗";
 
     if (bot.welcomeImage) {
-      await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          caption: welcome,
+      await sendMessage(
+        BOT_TOKEN,
+        chatId,
+        welcome,
+        {
+          reply_markup: undefined,
           photo: bot.welcomeImage,
-        }),
-      });
+        }
+      );
     } else {
       await sendMessage(BOT_TOKEN, chatId, welcome);
     }
@@ -285,8 +256,8 @@ export default async function handler(req, res) {
       {
         chatId,
         botId,
-        title: msg?.chat?.title || "",
-        username: msg?.chat?.username || "",
+        title: msg.chat.title || "",
+        username: msg.chat.username || "",
         type: chatType,
         lastActiveAt: new Date(),
         $setOnInsert: { firstSeenAt: new Date() },
@@ -297,181 +268,13 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  // ===========================
-  // ANTI-LINK
-  // ===========================
-  if (isGroup) {
-    if (
-      lower.includes("http://") ||
-      lower.includes("https://") ||
-      lower.includes("t.me/")
-    ) {
-      await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/deleteMessage`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            message_id: msg.message_id,
-          }),
-        }
-      );
-    }
-  }
-
-  // ===========================
-  // ADMIN CHECK
-  // ===========================
-  async function isAdmin(chatId, uid) {
-    try {
-      const r = await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/getChatMember?chat_id=${chatId}&user_id=${uid}`
-      );
-      const data = await r.json();
-      if (!data.ok) return false;
-
-      const st = data.result.status;
-      return st === "administrator" || st === "creator";
-    } catch {
-      return false;
-    }
-  }
-
-  // ===========================
-  // COMMANDS (ban/mute/kick/unmute)
-  // ===========================
-  if (
-    lower.startsWith("/ban") ||
-    lower.startsWith("/kick") ||
-    lower.startsWith("/mute") ||
-    lower.startsWith("/unmute")
-  ) {
-    if (!isGroup) {
-      await sendMessage(
-        BOT_TOKEN,
-        chatId,
-        "Ye command sirf groups me chalta hai."
-      );
-      return res.status(200).json({ ok: true });
-    }
-
-    const admin = await isAdmin(chatId, msg.from.id);
-    if (!admin) {
-      await sendMessage(
-        BOT_TOKEN,
-        chatId,
-        "⛔ Sirf admin ye command use kar sakta!"
-      );
-      return res.status(200).json({ ok: true });
-    }
-
-    const victim = msg.reply_to_message?.from;
-    if (!victim) {
-      await sendMessage(
-        BOT_TOKEN,
-        chatId,
-        "Kisko target karna hai? Reply karke /ban /mute karo."
-      );
-      return res.status(200).json({ ok: true });
-    }
-
-    const victimId = victim.id;
-
-    if (lower.startsWith("/ban")) {
-      await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/banChatMember`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chat_id: chatId, user_id: victimId }),
-        }
-      );
-      await sendMessage(BOT_TOKEN, chatId, "🚫 User banned.");
-    } else if (lower.startsWith("/kick")) {
-      await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/banChatMember`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            user_id: victimId,
-            until_date: Math.floor(Date.now() / 1000) + 10,
-          }),
-        }
-      );
-      await sendMessage(BOT_TOKEN, chatId, "👢 User kicked.");
-    } else if (lower.startsWith("/mute")) {
-      await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/restrictChatMember`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            user_id: victimId,
-            permissions: { can_send_messages: false },
-          }),
-        }
-      );
-      await sendMessage(BOT_TOKEN, chatId, "🔇 User muted.");
-    } else if (lower.startsWith("/unmute")) {
-      await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/restrictChatMember`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            user_id: victimId,
-            permissions: { can_send_messages: true },
-          }),
-        }
-      );
-      await sendMessage(BOT_TOKEN, chatId, "🔊 User unmuted.");
-    }
-
-    return res.status(200).json({ ok: true });
-  }
-
-  // ===========================
-  // ANTI-SPAM
-  // ===========================
-  if (isGroup) {
-    const last = global.lastMsg || {};
-    const key = chatId + "-" + userId;
-    const now = Date.now();
-
-    if (last[key] && now - last[key] < 1200) {
-      await fetch(
-        `https://api.telegram.org/bot${BOT_TOKEN}/deleteMessage`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: chatId,
-            message_id: msg.message_id,
-          }),
-        }
-      );
-    }
-
-    last[key] = now;
-    global.lastMsg = last;
-  }
-
-  // ===========================
-  // STRICT GROUP REPLY
-  // ===========================
+  //===== STRICT REPLY MODE =====
   let shouldReply = false;
 
   if (!isGroup) shouldReply = true;
   else {
     if (lower.includes("@" + botUsername)) shouldReply = true;
-    if (
-      msg.reply_to_message?.from?.username?.toLowerCase() === botUsername
-    )
+    if (msg.reply_to_message?.from?.username?.toLowerCase() === botUsername)
       shouldReply = true;
     if (lower.includes(bot.botName.toLowerCase())) shouldReply = true;
   }
@@ -479,9 +282,7 @@ export default async function handler(req, res) {
   if (isGroup && !shouldReply)
     return res.status(200).json({ ok: true });
 
-  // ===========================
-  // MEMORY SYSTEM
-  // ===========================
+  //===== MEMORY SYSTEM =====
   let memory = await Memory.findOne({ botId, chatId, userId });
 
   if (!memory) {
@@ -495,39 +296,33 @@ export default async function handler(req, res) {
   }
 
   memory.history.push({ role: "user", text: userText });
+
   if (memory.history.length > 10)
     memory.history = memory.history.slice(-10);
 
   await memory.save();
 
+  //===== BUILD CONVERSATION =====
   const conversation = memory.history
     .map((m) => `${m.role === "user" ? "User" : "Bot"}: ${m.text}`)
     .join("\n");
 
-  // ===========================
-  // AI PROMPT
-  // ===========================
-  const toneMap = {
-    normal: "Friendly, soft Hinglish, sweet natural tone.",
-    flirty: "Cute flirty tone, playful, emojis allowed.",
-    professional: "Calm, respectful, no flirting.",
-  };
-
+  //===== PROMPT =====
   const genderLine =
     bot.gender === "male"
       ? "Tum 19 saal ke Delhi ke ladke ho."
       : "Tum 18 saal ki cute Delhi girl ho.";
 
-  const ownerRule = `
-Tumhara real owner sirf *${bot.ownerName}* hai.
-Owner ka naam tabhi lo jab koi specifically pooche.
-`;
+  const toneMap = {
+    normal: "Friendly, soft Hinglish.",
+    flirty: "Cute flirty tone, emojis allowed 💕.",
+    professional: "Calm, respectful, no flirting.",
+  };
 
   const finalPrompt = `
 Tumhara naam *${bot.botName}* hai.
 ${genderLine}
 ${toneMap[bot.personality]}
-${ownerRule}
 
 Conversation:
 ${conversation}
@@ -536,22 +331,17 @@ User: ${userText}
 Bot:
 `;
 
+  //===== AI REPLY =====
   await sendChatAction(BOT_TOKEN, chatId, "typing");
-
-  let reply = "Oops, error 😅";
-  try {
-    reply = await generateWithYuki(finalPrompt);
-  } catch (err) {
-    console.log("AI ERROR:", err);
-  }
+  let reply = await generateWithYuki(finalPrompt);
+  if (!reply) reply = "Oops, error aa gaya 😅";
 
   memory.history.push({ role: "bot", text: reply });
   if (memory.history.length > 10)
     memory.history = memory.history.slice(-10);
-
   await memory.save();
 
   await sendMessage(BOT_TOKEN, chatId, reply);
 
   return res.status(200).json({ ok: true });
-          }
+}
